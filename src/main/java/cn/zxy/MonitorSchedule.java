@@ -1,5 +1,6 @@
 package cn.zxy;
 
+import cn.zxy.monitor.CoinMonitor;
 import cn.zxy.spider.Spider;
 
 import java.util.HashMap;
@@ -14,25 +15,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MonitorSchedule {
     public static final ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
-    private static Map<String, Double> lastPriceMap = null;
     public static void main(String[] args) {
-        service.scheduleAtFixedRate(()->{
-            Map<String, Double> priceMap = Spider.getCoinDatas();
-            String text = formatText(priceMap);
-            priceMap.remove("BTC");
-            System.out.println(text);
-            if(lastPriceMap != null){
-                for (Map.Entry entry : lastPriceMap.entrySet()){
-/*                    if(entry.getValue()){
-
-                    }*/
-                }
-            }
-            lastPriceMap = priceMap;
-        },0,2, TimeUnit.MINUTES);
-    }
-
-    private static String formatText(Map<String, Double> priceMap) {
-        return null;
+        service.scheduleAtFixedRate(new CoinMonitor(),0,2, TimeUnit.MINUTES);
     }
 }

@@ -34,20 +34,26 @@ public class Spider {
     public static final String BTCUSDT = "BTCUSDT";
     public static final BigDecimal USD_RATE = new BigDecimal(6.6071);
 
-    public static Map<String, Double> getCoinDatas(){
-        String content = get(URL);
+    public static Map<String, Double> getCoinDatas() {
+        String content = HttpUtil.doGet(URL, null);
+        if (content == null || content.trim().length() == 0) {
+            System.out.println("本次获取数据失败");
+            return null;
+        }
         JSONObject jsonObject = JSON.parseObject(content);
         JSONArray jsonArray = jsonObject.getJSONArray("data");
         List<CoinTemp> coinTempList = jsonArray.toJavaList(CoinTemp.class);
-        Map<String,CoinTemp> filterCoinTemps = coinTempList.stream().filter(x -> {
+
+        Map<String, CoinTemp> filterCoinTemps = coinTempList.stream().filter(x -> {
             return x.getSymbol().equals(VENBTC) || x.getSymbol().equals(BTCUSDT) || x.getSymbol().equals(EOSBTC) || x.getSymbol().equals(ETHBTC);
-        }).collect(Collectors.toMap(x->x.getSymbol(),x->x));
+        }).collect(Collectors.toMap(x -> x.getSymbol(), x -> x));
+
         BigDecimal btcUsdt = filterCoinTemps.get(BTCUSDT).getClose();
         Map<String, Double> resultMap = new HashMap<>();
-        filterCoinTemps.values().stream().forEach(x->{
-            if(x.getSymbol().equals(BTCUSDT)){
-                resultMap.put(x.getBaseAsset(),x.getClose().multiply(USD_RATE).doubleValue());
-            }else {
+        filterCoinTemps.values().stream().forEach(x -> {
+            if (x.getSymbol().equals(BTCUSDT)) {
+                resultMap.put(x.getBaseAsset(), x.getClose().multiply(USD_RATE).doubleValue());
+            } else {
                 resultMap.put(x.getBaseAsset(), x.getClose().multiply(btcUsdt).multiply(USD_RATE).doubleValue());
             }
         });
