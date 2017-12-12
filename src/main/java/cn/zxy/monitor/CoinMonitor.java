@@ -44,8 +44,10 @@ public class CoinMonitor implements Runnable {
         if (lastPriceMap != null) {
             for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
                 CoinData coinData = new CoinData(entry.getKey(), entry.getValue(), calRiseLevel(lastPriceMap.get(entry.getKey()), entry.getValue()));
-                if (coinData.getRiseLevel() >= RISE_LEVEL) {
+                if (Math.abs(coinData.getRiseLevel()) >= RISE_LEVEL) {
                     exceedRiseLevel = true;
+                    //价格超过了幅度的修改原来记录的价格
+                    lastPriceMap.replace(entry.getKey(), entry.getValue());
                 }
                 coinDataMap.put(coinData.getKey(), coinData);
             }
@@ -56,12 +58,9 @@ public class CoinMonitor implements Runnable {
             lastPriceMap = priceMap;
         }
         String notifyText = formatText(coinDataMap);
-        if (exceedRiseLevel) {
-            lastPriceMap = priceMap;
-            if (todaySendTimes < 100) {
-                sendEmail(coinDataMap, notifyText);
-                todaySendTimes++;
-            }
+        if (exceedRiseLevel && todaySendTimes < 100) {
+            sendEmail(coinDataMap, notifyText);
+            todaySendTimes++;
         }
         notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
         System.out.println(notifyText);
