@@ -17,7 +17,6 @@ import java.util.Map;
  */
 public class CoinMonitor implements Runnable {
     private static Map<String, Double> lastPriceMap = null;
-    private static final double RISE_LEVEL = 3d;
     private static int todaySendTimes = 0;
     private static int todayQueryTimes = 0;
     public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
@@ -25,45 +24,58 @@ public class CoinMonitor implements Runnable {
     public static String today = parseDateToStr(new Date(), TIME_FORMAT1);
     public static String currentDate;
     public static final String TEXT_FORMAT = "{0}:¥{1},{2}幅:{3}%\n";
+    public static final String TITLE_FORMAT = "【{0}】{1}出现较大波动，当前价格：{2}";
+
+    private Integer riseLevel;
+
+    public CoinMonitor(Integer riseLevel) {
+        this.riseLevel = riseLevel;
+    }
 
     @Override
     public void run() {
-        Map<String, Double> priceMap = Spider.getCoinDatas();
-        if (priceMap == null) {
+        try {
+            Map<String, Double> priceMap = Spider.getCoinDatas();
+            if (priceMap == null) {
+                return;
+            }
+            todayQueryTimes++;
+            currentDate = parseDateToStr(new Date(), TIME_FORMAT1);
+            //确保波动超出了预设的范围，并且当天发送邮件没有超过次数才发送邮件
+            if (!currentDate.equals(today)) {
+                todaySendTimes = 0;
+                today = currentDate;
+            }
+            boolean exceedRiseLevel = false;
+            Map<String, CoinData> coinDataMap = new HashMap<>();
+            if (lastPriceMap != null) {
+                for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
+                    CoinData coinData = new CoinData(entry.getKey(), entry.getValue(), calRiseLevel(lastPriceMap.get(entry.getKey()), entry.getValue()));
+                    if (Math.abs(coinData.getRiseLevel()) >= riseLevel) {
+                        exceedRiseLevel = true;
+                        //价格超过了幅度的修改原来记录的价格
+                        lastPriceMap.replace(entry.getKey(), entry.getValue());
+                    }
+                    coinDataMap.put(coinData.getKey(), coinData);
+                }
+            } else {
+                for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
+                    coinDataMap.put(entry.getKey(), new CoinData(entry.getKey(), entry.getValue(), 0D));
+                }
+                lastPriceMap = priceMap;
+            }
+            String notifyText = formatText(coinDataMap);
+            if (exceedRiseLevel && todaySendTimes < 100) {
+                sendEmail(coinDataMap, notifyText);
+                todaySendTimes++;
+            }
+            notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
+            System.out.println(notifyText);
+        } catch (Throwable e) {
+            //确保出线异常导致定时器依然执行
+            e.printStackTrace();
             return;
         }
-        todayQueryTimes++;
-        currentDate = parseDateToStr(new Date(), TIME_FORMAT1);
-        //确保波动超出了预设的范围，并且当天发送邮件没有超过次数才发送邮件
-        if (!currentDate.equals(today)) {
-            todaySendTimes = 0;
-            today = currentDate;
-        }
-        boolean exceedRiseLevel = false;
-        Map<String, CoinData> coinDataMap = new HashMap<>();
-        if (lastPriceMap != null) {
-            for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
-                CoinData coinData = new CoinData(entry.getKey(), entry.getValue(), calRiseLevel(lastPriceMap.get(entry.getKey()), entry.getValue()));
-                if (Math.abs(coinData.getRiseLevel()) >= RISE_LEVEL) {
-                    exceedRiseLevel = true;
-                    //价格超过了幅度的修改原来记录的价格
-                    lastPriceMap.replace(entry.getKey(), entry.getValue());
-                }
-                coinDataMap.put(coinData.getKey(), coinData);
-            }
-        } else {
-            for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
-                coinDataMap.put(entry.getKey(), new CoinData(entry.getKey(), entry.getValue(), 0D));
-            }
-            lastPriceMap = priceMap;
-        }
-        String notifyText = formatText(coinDataMap);
-        if (exceedRiseLevel && todaySendTimes < 100) {
-            sendEmail(coinDataMap, notifyText);
-            todaySendTimes++;
-        }
-        notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
-        System.out.println(notifyText);
     }
 
     private Double calRiseLevel(Double before, Double current) {
@@ -71,8 +83,9 @@ public class CoinMonitor implements Runnable {
     }
 
     private void sendEmail(Map<String, CoinData> coinDataMap, String notifyText) {
-        CoinData coinData = coinDataMap.entrySet().stream().filter(x -> x.getValue().getRiseLevel() >= RISE_LEVEL).findFirst().get().getValue();
-        MailUtil.send("【重要】" + coinData.getKey() + "出现较大波动，价格：" + formatDouble(coinData.getRmbPrice()), notifyText, "531610808@qq.com", "cici.lee2015@outlook.com", "hubo18163912002@163.com");
+        CoinData coinData = coinDataMap.entrySet().stream().filter(x -> Math.abs(x.getValue().getRiseLevel()) >= riseLevel).findFirst().get().getValue();
+        String title = MessageFormat.format(TITLE_FORMAT, coinData.getRiseLevel() >= 0 ? "涨↑↑↑↑" : "跌↓↓↓↓", coinData.getKey(), formatDouble(coinData.getRmbPrice()));
+        MailUtil.send(title, notifyText, "531610808@qq.com", "cici.lee2015@outlook.com", "hubo18163912002@163.com");
     }
 
     private String formatText(Map<String, CoinData> coinDataMap) {

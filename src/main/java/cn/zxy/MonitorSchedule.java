@@ -15,7 +15,12 @@ import java.util.concurrent.TimeUnit;
  */
 public class MonitorSchedule {
     public static final ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
+
     public static void main(String[] args) {
-        service.scheduleAtFixedRate(new CoinMonitor(),0,2, TimeUnit.MINUTES);
+        int riseLevel = 3;
+        if (args != null && args.length > 0) {
+            riseLevel = Integer.parseInt(args[0]);
+        }
+        service.scheduleAtFixedRate(new CoinMonitor(riseLevel), 0, 2, TimeUnit.MINUTES);
     }
 }
