@@ -32,6 +32,6 @@ public class MonitorSchedule {
             e.printStackTrace();
         }
         service.scheduleAtFixedRate(new CoinMonitor(), 0, ConfigLoader.getConfig().getFrequency(), TimeUnit.MINUTES);
-        service.scheduleAtFixedRate(configLoader, 0, 10, TimeUnit.SECONDS);
+        service.scheduleAtFixedRate(configLoader, 0, 5, TimeUnit.SECONDS);
     }
 }
