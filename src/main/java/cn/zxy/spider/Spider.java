@@ -1,8 +1,10 @@
 package cn.zxy.spider;
 
+import cn.zxy.config.ConfigLoader;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.github.rholder.retry.*;
 import lombok.Data;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.HttpClient;
@@ -20,6 +22,8 @@ import java.text.Bidi;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -28,15 +32,27 @@ import java.util.stream.Collectors;
  */
 public class Spider {
     public static final String URL = "https://www.binance.com/exchange/public/product";
-    public static final String VENBTC = "VENBTC";
-    public static final String EOSBTC = "EOSBTC";
-    public static final String ETHBTC = "ETHBTC";
     public static final String BTCUSDT = "BTCUSDT";
     public static final BigDecimal USD_RATE = new BigDecimal(6.6071);
 
+    //获取数据失败重试3次
+    private static final Retryer<String> RETRYER_TIME_OUT = RetryerBuilder.<String>newBuilder()
+            .withWaitStrategy(WaitStrategies.noWait())
+            .retryIfException()
+            .withStopStrategy(StopStrategies.stopAfterAttempt(3))
+            .retryIfResult(x -> (x == null || x.trim().length() == 0))
+            .build();
+
     public static Map<String, Double> getCoinDatas() {
-        String content = HttpUtil.doGet(URL, null);
-        if (content == null || content.trim().length() == 0) {
+        String content = null;
+        try {
+            content = RETRYER_TIME_OUT.call(() -> HttpUtil.doGet(URL, null));
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (RetryException e) {
+            e.printStackTrace();
+        }
+        if (content == null) {
             System.out.println("本次获取数据失败");
             return null;
         }
@@ -44,9 +60,9 @@ public class Spider {
         JSONArray jsonArray = jsonObject.getJSONArray("data");
         List<CoinTemp> coinTempList = jsonArray.toJavaList(CoinTemp.class);
 
-        Map<String, CoinTemp> filterCoinTemps = coinTempList.stream().filter(x -> {
-            return x.getSymbol().equals(VENBTC) || x.getSymbol().equals(BTCUSDT) || x.getSymbol().equals(EOSBTC) || x.getSymbol().equals(ETHBTC);
-        }).collect(Collectors.toMap(x -> x.getSymbol(), x -> x));
+        Map<String, CoinTemp> filterCoinTemps = coinTempList.stream()
+                .filter(x -> (x.getSymbol().equals(BTCUSDT) || ConfigLoader.getConfig().getCoinTypes().contains(x.getSymbol().endsWith("BTC") ? x.getSymbol().split("BTC")[0] : x.getSymbol())))
+                .collect(Collectors.toMap(x -> x.getSymbol(), x -> x));
 
         BigDecimal btcUsdt = filterCoinTemps.get(BTCUSDT).getClose();
         Map<String, Double> resultMap = new HashMap<>();
@@ -63,38 +79,6 @@ public class Spider {
     public static void main(String[] args) throws URISyntaxException {
         Map<String, Double> map = getCoinDatas();
         System.out.println(map);
-    }
-
-    /**
-     * 发送 get请求
-     */
-    public static String get(String url) {
-        String result = null;
-        CloseableHttpClient httpClient = HttpClients.createDefault();
-        try {
-            // 创建httpget.
-            HttpGet httpget = new HttpGet(url);
-            System.out.println("executing request " + httpget.getURI());
-            // 执行get请求.
-            CloseableHttpResponse response = httpClient.execute(httpget);
-            try {
-                // 获取响应实体
-                HttpEntity entity = response.getEntity();
-                result = EntityUtils.toString(entity);
-            } finally {
-                response.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            // 关闭连接,释放资源
-            try {
-                httpClient.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            return result;
-        }
     }
 
     @Data

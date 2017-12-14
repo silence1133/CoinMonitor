@@ -1,5 +1,6 @@
 package cn.zxy.monitor;
 
+import cn.zxy.config.ConfigLoader;
 import cn.zxy.mail.MailUtil;
 import cn.zxy.spider.CoinData;
 import cn.zxy.spider.Spider;
@@ -26,15 +27,13 @@ public class CoinMonitor implements Runnable {
     public static final String TEXT_FORMAT = "{0}:¥{1},{2}幅:{3}%\n";
     public static final String TITLE_FORMAT = "【{0}】{1}出现较大波动，当前价格：{2}";
 
-    private Integer riseLevel;
-
-    public CoinMonitor(Integer riseLevel) {
-        this.riseLevel = riseLevel;
-    }
-
     @Override
     public void run() {
         try {
+            if (ConfigLoader.getConfig().getMonitorSwitch().equals("off")) {
+                System.out.println("监控已经关闭");
+                return;
+            }
             Map<String, Double> priceMap = Spider.getCoinDatas();
             if (priceMap == null) {
                 return;
@@ -50,8 +49,11 @@ public class CoinMonitor implements Runnable {
             Map<String, CoinData> coinDataMap = new HashMap<>();
             if (lastPriceMap != null) {
                 for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
+                    if (!lastPriceMap.containsKey(entry.getKey())) {
+                        lastPriceMap.put(entry.getKey(), entry.getValue());
+                    }
                     CoinData coinData = new CoinData(entry.getKey(), entry.getValue(), calRiseLevel(lastPriceMap.get(entry.getKey()), entry.getValue()));
-                    if (Math.abs(coinData.getRiseLevel()) >= riseLevel) {
+                    if (Math.abs(coinData.getRiseLevel()) >= ConfigLoader.getConfig().getMonitorLevel()) {
                         exceedRiseLevel = true;
                         //价格超过了幅度的修改原来记录的价格
                         lastPriceMap.replace(entry.getKey(), entry.getValue());
@@ -83,9 +85,10 @@ public class CoinMonitor implements Runnable {
     }
 
     private void sendEmail(Map<String, CoinData> coinDataMap, String notifyText) {
-        CoinData coinData = coinDataMap.entrySet().stream().filter(x -> Math.abs(x.getValue().getRiseLevel()) >= riseLevel).findFirst().get().getValue();
+        CoinData coinData = coinDataMap.entrySet().stream().filter(x -> Math.abs(x.getValue().getRiseLevel()) >= ConfigLoader.getConfig().getMonitorLevel()).findFirst().get().getValue();
         String title = MessageFormat.format(TITLE_FORMAT, coinData.getRiseLevel() >= 0 ? "涨↑↑↑↑" : "跌↓↓↓↓", coinData.getKey(), formatDouble(coinData.getRmbPrice()));
-        MailUtil.send(title, notifyText, "531610808@qq.com", "cici.lee2015@outlook.com", "hubo18163912002@163.com");
+        ;
+        MailUtil.send(title, notifyText, ConfigLoader.getConfig().getEmails().stream().toArray(String[]::new));
     }
 
     private String formatText(Map<String, CoinData> coinDataMap) {

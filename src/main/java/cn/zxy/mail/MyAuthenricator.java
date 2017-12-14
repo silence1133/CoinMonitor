@@ -18,4 +18,5 @@ public class MyAuthenricator extends Authenticator {
     protected PasswordAuthentication getPasswordAuthentication() {
         return new PasswordAuthentication(user,pass);
     }
+
 }
