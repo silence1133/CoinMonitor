@@ -16,4 +16,6 @@ public class MonitorConfig {
     private Integer monitorLevel;
     private Integer frequency;
     private List<String> emails;
+    private String emailFrom;
+    private String emailPassword;
 }

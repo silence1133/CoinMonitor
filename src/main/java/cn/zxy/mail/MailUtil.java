@@ -1,5 +1,7 @@
 package cn.zxy.mail;
 
+import cn.zxy.config.ConfigLoader;
+
 import javax.mail.*;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
@@ -13,12 +15,12 @@ import java.util.Properties;
  */
 public class MailUtil {
     public static void main(String[] args) {
-        send("标题", "内容发到付\n测试", "531610808@qq.com");
+        send("222", "内容发到付\n测试", "531610808@qq.com");
     }
 
     public static void send(String title, String content, String... receiveEmail) {
         // 发件人电子邮箱
-        String from = "zhangxiaoyong@fcbox.com";
+        String from = ConfigLoader.getConfig().getEmailFrom();
 
         // 指定发送邮件的主机为 smtp.qq.com
         String host = "smtp.exmail.qq.com";  //QQ 邮件服务器
@@ -28,9 +30,9 @@ public class MailUtil {
         // 设置邮件服务器
         properties.setProperty("mail.smtp.host", host);
         properties.setProperty("mail.smtp.protocol", "smtp");
-        properties.put("mail.smtp.auth", "true");
+        properties.setProperty("mail.smtp.auth", "true");
         // 获取默认session对象
-        Session session = Session.getDefaultInstance(properties, new MyAuthenricator("zhangxiaoyong@fcbox.com", "Fc123456!"));
+        Session session = Session.getDefaultInstance(properties, new MyAuthenricator(ConfigLoader.getConfig().getEmailFrom(), ConfigLoader.getConfig().getEmailPassword()));
         try {
             // 创建默认的 MimeMessage 对象
             MimeMessage message = new MimeMessage(session);
