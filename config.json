@@ -1,0 +1,46 @@
+{
+  "config" : {
+    "openMonitor" : "true",
+    "frequency" : "1",
+    "maxSendEmails" : "10",
+    "emailFrom" : "18163912002@163.com",
+    "emailPassword" : "BOBO123456"
+  },
+  "subscribers" : [
+    {
+      "email" : "hubo18163912002@163.com",
+      "coins" : [
+        {
+          "coinName" : "VEN",
+          "monitorLevel" : "2"
+        },
+        {
+          "coinName" : "TNT",
+          "monitorLevel" : "1"
+        },
+        {
+          "coinName" : "DDD",
+          "monitorLevel" : "3"
+        }
+      ]
+    },
+
+    {
+      "email" : "18163912002@163.com",
+      "coins" : [
+        {
+          "coinName" : "VEN",
+          "monitorLevel" : "1"
+        },
+        {
+          "coinName" : "EOS",
+          "monitorLevel" : "2"
+        },
+        {
+          "coinName" : "UIP",
+          "monitorLevel" : "3"
+        }
+      ]
+    }
+  ]
+}

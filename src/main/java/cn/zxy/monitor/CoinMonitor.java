@@ -1,6 +1,9 @@
 package cn.zxy.monitor;
 
+import cn.zxy.config.Coin;
 import cn.zxy.config.ConfigLoader;
+import cn.zxy.config.Subscriber;
+import cn.zxy.config.SystemConfig;
 import cn.zxy.mail.MailUtil;
 import cn.zxy.spider.CoinData;
 import cn.zxy.spider.Spider;
@@ -11,13 +14,14 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * @author Silence
  * @Date 2017/12/11
  */
 public class CoinMonitor implements Runnable {
-    private static Map<String, Double> lastPriceMap = null;
+    private static Map<String, Map<String, Double>> lastPriceMap = new HashMap<>();
     private static int todaySendTimes = 0;
     private static int todayQueryTimes = 0;
     public static final String TIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
@@ -25,12 +29,13 @@ public class CoinMonitor implements Runnable {
     public static String today = parseDateToStr(new Date(), TIME_FORMAT1);
     public static String currentDate;
     public static final String TEXT_FORMAT = "{0}:¥{1},{2}幅:{3}%\n";
-    public static final String TITLE_FORMAT = "【{0}】{1}出现较大波动，当前价格：{2}";
+    public static final String EMAIL_TITLE = "亲，您的数字货币带来了神秘信息，请查收！";
 
     @Override
     public void run() {
         try {
-            if (ConfigLoader.getConfig().getMonitorSwitch().equals("off")) {
+
+            if (!ConfigLoader.getSystemConfig().getConfig().getOpenMonitor()) {
                 System.out.println("监控已经关闭");
                 return;
             }
@@ -45,34 +50,53 @@ public class CoinMonitor implements Runnable {
                 todaySendTimes = 0;
                 today = currentDate;
             }
-            boolean exceedRiseLevel = false;
-            Map<String, CoinData> coinDataMap = new HashMap<>();
+
+            Map<String, Map<String, CoinData>> feedbackDatas = new HashMap<>(16);
             if (lastPriceMap != null) {
-                for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
-                    if (!lastPriceMap.containsKey(entry.getKey())) {
-                        lastPriceMap.put(entry.getKey(), entry.getValue());
+                Subscriber[] subscribers = ConfigLoader.getSystemConfig().getSubscribers();
+                for (Subscriber subscriber : subscribers) {
+                    if (!lastPriceMap.containsKey(subscriber.getEmail())) {
+                        lastPriceMap.put(subscriber.getEmail(), new HashMap<>(16));
                     }
-                    CoinData coinData = new CoinData(entry.getKey(), entry.getValue(), calRiseLevel(lastPriceMap.get(entry.getKey()), entry.getValue()));
-                    if (Math.abs(coinData.getRiseLevel()) >= ConfigLoader.getConfig().getMonitorLevel()) {
-                        exceedRiseLevel = true;
-                        //价格超过了幅度的修改原来记录的价格
-                        lastPriceMap.replace(entry.getKey(), entry.getValue());
+                    Map<String, CoinData> coinDataMap = new HashMap<>(16);
+                    Map<String, Double> coinPriceMap = lastPriceMap.get(subscriber.getEmail());
+                    for (Coin coin : subscriber.getCoins()) {
+                        Double currentPrice = priceMap.get(coin.getCoinName());
+                        if (!coinPriceMap.containsKey(coin.getCoinName())) {
+                            coinPriceMap.put(coin.getCoinName(), currentPrice);
+                        }
+                        Double lastPrice = coinPriceMap.get(coin.getCoinName());
+                        Double currentRiseLevel = calRiseLevel(lastPrice, currentPrice);
+                        if (Math.abs(currentRiseLevel) >= coin.getMonitorLevel()) {
+                            CoinData coinData = new CoinData(coin.getCoinName(), currentPrice, currentRiseLevel);
+                            coinDataMap.put(coinData.getKey(), coinData);
+
+                            // 更新历史价格
+                            coinPriceMap.replace(coin.getCoinName(), currentPrice);
+                        }
                     }
-                    coinDataMap.put(coinData.getKey(), coinData);
+                    if (coinDataMap.size() > 0) {
+                        feedbackDatas.put(subscriber.getEmail(), coinDataMap);
+                    }
                 }
-            } else {
-                for (Map.Entry<String, Double> entry : priceMap.entrySet()) {
-                    coinDataMap.put(entry.getKey(), new CoinData(entry.getKey(), entry.getValue(), 0D));
-                }
-                lastPriceMap = priceMap;
+
             }
-            String notifyText = formatText(coinDataMap);
-            if (exceedRiseLevel && todaySendTimes < 100) {
-                sendEmail(coinDataMap, notifyText);
+
+            if (todaySendTimes >= ConfigLoader.getSystemConfig().getConfig().getMaxSendEmails()) {
+                return;
+            }
+
+            Set<String> emails = feedbackDatas.keySet();
+            for(String email : emails) {
+                Map<String, CoinData> coinDataMap = feedbackDatas.get(email);
+                String notifyText = formatText(coinDataMap);
+                MailUtil.send(EMAIL_TITLE, notifyText, email);
                 todaySendTimes++;
+                notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
+                System.out.println(notifyText);
             }
-            notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
-            System.out.println(notifyText);
+
+
         } catch (Throwable e) {
             //确保出线异常导致定时器依然执行
             e.printStackTrace();
@@ -82,13 +106,6 @@ public class CoinMonitor implements Runnable {
 
     private Double calRiseLevel(Double before, Double current) {
         return ((current - before) / current) * 100;
-    }
-
-    private void sendEmail(Map<String, CoinData> coinDataMap, String notifyText) {
-        CoinData coinData = coinDataMap.entrySet().stream().filter(x -> Math.abs(x.getValue().getRiseLevel()) >= ConfigLoader.getConfig().getMonitorLevel()).findFirst().get().getValue();
-        String title = MessageFormat.format(TITLE_FORMAT, coinData.getRiseLevel() >= 0 ? "涨↑↑↑↑" : "跌↓↓↓↓", coinData.getKey(), formatDouble(coinData.getRmbPrice()));
-        ;
-        MailUtil.send(title, notifyText, ConfigLoader.getConfig().getEmails().stream().toArray(String[]::new));
     }
 
     private String formatText(Map<String, CoinData> coinDataMap) {
