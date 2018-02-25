@@ -10,6 +10,8 @@ public class PublicConfig {
 
     private Boolean openMonitor;
 
+    private String spiderClass;
+
     private Integer frequency;
 
     private Integer maxSendEmails;

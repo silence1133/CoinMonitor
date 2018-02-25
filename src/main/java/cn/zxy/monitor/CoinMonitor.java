@@ -34,73 +34,105 @@ public class CoinMonitor implements Runnable {
     @Override
     public void run() {
         try {
-
             if (!ConfigLoader.getSystemConfig().getConfig().getOpenMonitor()) {
                 System.out.println("监控已经关闭");
                 return;
             }
-            Map<String, Double> priceMap = Spider.getCoinDatas();
-            if (priceMap == null) {
+
+            Spider spider = (Spider) Class.forName(ConfigLoader.getSystemConfig().getConfig().getSpiderClass()).newInstance();
+            Map<String, Double> priceMap = spider.getCoinDatas();
+            if (priceMap.size() == 0) {
                 return;
             }
+
             todayQueryTimes++;
-            currentDate = parseDateToStr(new Date(), TIME_FORMAT1);
-            //确保波动超出了预设的范围，并且当天发送邮件没有超过次数才发送邮件
-            if (!currentDate.equals(today)) {
-                todaySendTimes = 0;
-                today = currentDate;
-            }
+            init();
 
-            Map<String, Map<String, CoinData>> feedbackDatas = new HashMap<>(16);
-            if (lastPriceMap != null) {
-                Subscriber[] subscribers = ConfigLoader.getSystemConfig().getSubscribers();
-                for (Subscriber subscriber : subscribers) {
-                    if (!lastPriceMap.containsKey(subscriber.getEmail())) {
-                        lastPriceMap.put(subscriber.getEmail(), new HashMap<>(16));
-                    }
-                    Map<String, CoinData> coinDataMap = new HashMap<>(16);
-                    Map<String, Double> coinPriceMap = lastPriceMap.get(subscriber.getEmail());
-                    for (Coin coin : subscriber.getCoins()) {
-                        Double currentPrice = priceMap.get(coin.getCoinName());
-                        if (!coinPriceMap.containsKey(coin.getCoinName())) {
-                            coinPriceMap.put(coin.getCoinName(), currentPrice);
-                        }
-                        Double lastPrice = coinPriceMap.get(coin.getCoinName());
-                        Double currentRiseLevel = calRiseLevel(lastPrice, currentPrice);
-                        if (Math.abs(currentRiseLevel) >= coin.getMonitorLevel()) {
-                            CoinData coinData = new CoinData(coin.getCoinName(), currentPrice, currentRiseLevel);
-                            coinDataMap.put(coinData.getKey(), coinData);
-
-                            // 更新历史价格
-                            coinPriceMap.replace(coin.getCoinName(), currentPrice);
-                        }
-                    }
-                    if (coinDataMap.size() > 0) {
-                        feedbackDatas.put(subscriber.getEmail(), coinDataMap);
-                    }
-                }
-
-            }
-
-            if (todaySendTimes >= ConfigLoader.getSystemConfig().getConfig().getMaxSendEmails()) {
-                return;
-            }
-
-            Set<String> emails = feedbackDatas.keySet();
-            for(String email : emails) {
-                Map<String, CoinData> coinDataMap = feedbackDatas.get(email);
-                String notifyText = formatText(coinDataMap);
-                MailUtil.send(EMAIL_TITLE, notifyText, email);
-                todaySendTimes++;
-                notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
-                System.out.println(notifyText);
-            }
-
-
+            Map<String, Map<String, CoinData>> feedbackData = getFeedbackData(priceMap);
+            sendEmailToSubscriber(feedbackData);
         } catch (Throwable e) {
             //确保出线异常导致定时器依然执行
             e.printStackTrace();
             return;
+        }
+    }
+
+    private void sendEmailToSubscriber(Map<String, Map<String, CoinData>> feedbackData) {
+        if (todaySendTimes >= ConfigLoader.getSystemConfig().getConfig().getMaxSendEmails()) {
+            return;
+        }
+        Set<String> emails = feedbackData.keySet();
+        for(String email : emails) {
+            Map<String, CoinData> coinDataMap = feedbackData.get(email);
+            String notifyText = formatText(coinDataMap);
+            MailUtil.send(EMAIL_TITLE, notifyText, email);
+            todaySendTimes++;
+            notifyText = notifyText.concat("今日累计通知次数：").concat(String.valueOf(todaySendTimes)).concat("\n");
+            System.out.println(notifyText);
+        }
+    }
+
+    /**
+     * 获取所有订阅者关心的数字货币中超过预期价格波动的数字货币信息
+     * @param priceMap 所有数字货币的价格信息
+     * @return 返回键为订阅者邮箱，值为订阅者关心的价格波动超过预期的数字货币信息
+     */
+    private Map<String, Map<String, CoinData>> getFeedbackData(Map<String, Double> priceMap) {
+        Map<String, Map<String, CoinData>> feedbackData = new HashMap<>(16);
+
+        Subscriber[] subscribers = ConfigLoader.getSystemConfig().getSubscribers();
+        for (Subscriber subscriber : subscribers) {
+            if (!lastPriceMap.containsKey(subscriber.getEmail())) {
+                lastPriceMap.put(subscriber.getEmail(), new HashMap<>(16));
+            }
+            Map<String, CoinData> coinDataMap = getCoinDataMap(subscriber, priceMap);
+            if (coinDataMap.size() > 0) {
+                feedbackData.put(subscriber.getEmail(), coinDataMap);
+            }
+        }
+
+        return feedbackData;
+    }
+
+    /**
+     * 获取某个订阅者关心的价格波动超过预期的数字货币信息
+     * @param subscriber 订阅者
+     * @param priceMap 所有数字货币的价格信息
+     * @return 返回键为数字货币名称，值为对应数字货币信息的 map
+     */
+    private Map<String, CoinData> getCoinDataMap(Subscriber subscriber, Map<String, Double> priceMap) {
+        Map<String, CoinData> coinDataMap = new HashMap<>(16);
+        Map<String, Double> coinPriceMap = lastPriceMap.get(subscriber.getEmail());
+        for (Coin coin : subscriber.getCoins()) {
+            if (!priceMap.containsKey(coin.getCoinName())) {
+                continue;
+            }
+            Double currentPrice = priceMap.get(coin.getCoinName());
+            if (!coinPriceMap.containsKey(coin.getCoinName())) {
+                coinPriceMap.put(coin.getCoinName(), currentPrice);
+            }
+            Double lastPrice = coinPriceMap.get(coin.getCoinName());
+            Double currentRiseLevel = calRiseLevel(lastPrice, currentPrice);
+            if (Math.abs(currentRiseLevel) >= coin.getMonitorLevel()) {
+                CoinData coinData = new CoinData(coin.getCoinName(), currentPrice, currentRiseLevel);
+                coinDataMap.put(coinData.getKey(), coinData);
+
+                // 更新历史价格
+                coinPriceMap.replace(coin.getCoinName(), currentPrice);
+            }
+        }
+
+        return coinDataMap;
+    }
+
+    /**
+     * // 第二天凌晨，数据初始化
+     */
+    private void init() {
+        currentDate = parseDateToStr(new Date(), TIME_FORMAT1);
+        if (!currentDate.equals(today)) {
+            todaySendTimes = 0;
+            today = currentDate;
         }
     }
 

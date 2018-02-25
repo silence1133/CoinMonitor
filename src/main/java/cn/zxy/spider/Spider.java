@@ -31,20 +31,18 @@ import java.util.stream.Collectors;
  * @author Silence
  * @Date 2017/12/11
  */
-public class Spider {
-    public static final String COINMARKETCAP_URL = "https://api.coinmarketcap.com/v1/ticker/?limit=0";
-    public static final  String USD_RATE_URL = "https://api.fixer.io/latest?base=USD";
-    public static final String BTCUSDT = "BTCUSDT";
+public abstract class Spider {
+    private static final  String USD_RATE_URL = "https://api.fixer.io/latest?base=USD";
 
     //获取数据失败重试3次
-    private static final Retryer<String> RETRYER_TIME_OUT = RetryerBuilder.<String>newBuilder()
+    protected static final Retryer<String> RETRYER_TIME_OUT = RetryerBuilder.<String>newBuilder()
             .withWaitStrategy(WaitStrategies.noWait())
             .retryIfException()
             .withStopStrategy(StopStrategies.stopAfterAttempt(3))
             .retryIfResult(x -> (x == null || x.trim().length() == 0))
             .build();
 
-    private static BigDecimal getUsdRate() {
+    protected BigDecimal getUsdRate() {
         String content = null;
         try {
             content = RETRYER_TIME_OUT.call(() -> HttpUtil.doGet(USD_RATE_URL, null));
@@ -64,38 +62,5 @@ public class Spider {
     }
 
 
-    public static Map<String, Double> getCoinDatas() {
-        String content = null;
-        try {
-            content = RETRYER_TIME_OUT.call(() -> HttpUtil.doGet(COINMARKETCAP_URL, null));
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        } catch (RetryException e) {
-            e.printStackTrace();
-        }
-        if (content == null) {
-            System.out.println("本次获取数据失败");
-            return null;
-        }
-
-        JSONArray jsonArray = JSON.parseArray(content);
-        List<CoinTemp> coinTempList = jsonArray.toJavaList(CoinTemp.class);
-
-        BigDecimal usdRate = getUsdRate();
-        Map<String, Double> resultMap = new HashMap<>(16);
-        coinTempList.stream().forEach(x -> {
-            if (x.getPrice_usd() != null) {
-                resultMap.put(x.getSymbol(), x.getPrice_usd().multiply(usdRate).doubleValue());
-            }
-        });
-
-        System.out.println(resultMap);
-        return resultMap;
-    }
-
-    @Data
-    static class CoinTemp {
-        private String symbol;
-        private BigDecimal price_usd;
-    }
+    public abstract Map<String, Double> getCoinDatas();
 }
