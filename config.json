@@ -1,30 +1,13 @@
 {
   "config" : {
     "openMonitor" : "true",
+    "spiderClass" : "cn.zxy.spider.impl.BinanceSpiderImpl",
     "frequency" : "1",
     "maxSendEmails" : "10",
     "emailFrom" : "18163912002@163.com",
     "emailPassword" : "BOBO123456"
   },
   "subscribers" : [
-    {
-      "email" : "hubo18163912002@163.com",
-      "coins" : [
-        {
-          "coinName" : "VEN",
-          "monitorLevel" : "2"
-        },
-        {
-          "coinName" : "TNT",
-          "monitorLevel" : "1"
-        },
-        {
-          "coinName" : "DDD",
-          "monitorLevel" : "3"
-        }
-      ]
-    },
-
     {
       "email" : "18163912002@163.com",
       "coins" : [
@@ -33,12 +16,26 @@
           "monitorLevel" : "1"
         },
         {
-          "coinName" : "EOS",
-          "monitorLevel" : "2"
+          "coinName" : "TNT",
+          "monitorLevel" : "1"
         },
         {
-          "coinName" : "UIP",
-          "monitorLevel" : "3"
+          "coinName" : "RUFF",
+          "monitorLevel" : "1"
+        },
+        {
+          "coinName" : "DDD",
+          "monitorLevel" : "1"
+        }
+      ]
+    },
+
+    {
+      "email" : "531610808@qq.com",
+      "coins" : [
+        {
+          "coinName" : "VEN",
+          "monitorLevel" : "5"
         }
       ]
     }
