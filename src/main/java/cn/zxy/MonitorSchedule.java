@@ -2,10 +2,8 @@ package cn.zxy;
 
 import cn.zxy.config.ConfigLoader;
 import cn.zxy.monitor.CoinMonitor;
-import cn.zxy.spider.Spider;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -25,13 +23,14 @@ public class MonitorSchedule {
             System.out.println("请指定配置文件的路径");
             return;
         }
+//        String configPath = "E:\\IdeaProject\\CoinMonitor\\config.json";
         ConfigLoader configLoader = new ConfigLoader(configPath);
         try {
             configLoader.load();
         } catch (Exception e) {
             e.printStackTrace();
         }
-        service.scheduleAtFixedRate(new CoinMonitor(), 0, ConfigLoader.getConfig().getFrequency(), TimeUnit.MINUTES);
+        service.scheduleAtFixedRate(new CoinMonitor(), 0, ConfigLoader.getSystemConfig().getConfig().getFrequency(), TimeUnit.MINUTES);
         service.scheduleAtFixedRate(configLoader, 0, 5, TimeUnit.SECONDS);
     }
 }

@@ -36,6 +36,7 @@ public class HttpUtil {
 
     private static final Log LOG = LogFactory.getLog(HttpUtil.class);
     public static final String CHARSET = "UTF-8";
+    private static final int HTTP_OK = 200;
 
     public static String doGet(String url, Map<String, String> params) {
         return doGet(url, params, CHARSET);
@@ -91,21 +92,13 @@ public class HttpUtil {
                 return null;
             }
 
-            if (params != null && !params.isEmpty()) {
-                List<NameValuePair> pairs = new ArrayList<NameValuePair>(params.size());
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    String value = entry.getValue();
-                    if (value != null) {
-                        pairs.add(new BasicNameValuePair(entry.getKey(), value));
-                    }
-                }
-                url += "?" + EntityUtils.toString(new UrlEncodedFormEntity(pairs, charset));
-            }
+            url = getUrl(url, params, charset);
+
             LOG.info("HttpUtil doGet url:" + url);
             httpGet = new HttpGet(url);
             response = httpClient.execute(httpGet);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+            if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
@@ -121,33 +114,7 @@ public class HttpUtil {
         } catch (Exception e) {
             LOG.error("doGet error ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpGet != null) {
-                try {
-                    httpGet.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closeGet(entity, response, httpGet, httpClient);
         }
         return null;
     }
@@ -179,16 +146,7 @@ public class HttpUtil {
                 return null;
             }
 
-            List<NameValuePair> pairs = null;
-            if (params != null && !params.isEmpty()) {
-                pairs = new ArrayList<NameValuePair>(params.size());
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    String value = entry.getValue();
-                    if (value != null) {
-                        pairs.add(new BasicNameValuePair(entry.getKey(), value));
-                    }
-                }
-            }
+            List<NameValuePair> pairs = getPairs(params);
 
             httpPost = new HttpPost(url);
             if (pairs != null && pairs.size() > 0) {
@@ -196,7 +154,7 @@ public class HttpUtil {
             }
             response = httpClient.execute(httpPost);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+            if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
@@ -212,33 +170,7 @@ public class HttpUtil {
         } catch (IOException e) {
             LOG.error("doGet error ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpPost != null) {
-                try {
-                    httpPost.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closePost(entity, response, httpPost, httpClient);
         }
         return null;
     }
@@ -258,7 +190,6 @@ public class HttpUtil {
             httpPost = new HttpPost(url);
             httpPost.setEntity(new ByteArrayEntity(content.getBytes(CHARSET), ContentType.APPLICATION_XML));
             response = httpClient.execute(httpPost);
-            int statusCode = response.getStatusLine().getStatusCode();
 
             entity = response.getEntity();
             String result = null;
@@ -273,33 +204,7 @@ public class HttpUtil {
         } catch (IOException e) {
             LOG.error("doPost IOException ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpPost != null) {
-                try {
-                    httpPost.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closePost(entity, response, httpPost, httpClient);
         }
         return null;
     }
@@ -321,7 +226,7 @@ public class HttpUtil {
             httpPost.setEntity(new ByteArrayEntity(content.getBytes(CHARSET), ContentType.APPLICATION_JSON));
             response = httpClient.execute(httpPost);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+            if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
@@ -337,33 +242,7 @@ public class HttpUtil {
         } catch (IOException e) {
             LOG.error("doPost IOException ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpPost != null) {
-                try {
-                    httpPost.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closePost(entity, response, httpPost, httpClient);
         }
         return null;
     }
@@ -395,26 +274,19 @@ public class HttpUtil {
                 return null;
             }
 
-            if (params != null && !params.isEmpty()) {
-                List<NameValuePair> pairs = new ArrayList<NameValuePair>(params.size());
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    String value = entry.getValue();
-                    if (value != null) {
-                        pairs.add(new BasicNameValuePair(entry.getKey(), value));
-                    }
-                }
-                url += "?" + EntityUtils.toString(new UrlEncodedFormEntity(pairs, charset));
-            }
+            url = getUrl(url, params, charset);
 
             httpGet = new HttpGet(url);
             response = httpClient.execute(httpGet);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+            if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
             long length = entity.getContentLength();
-            if (length == 0) return null;
+            if (length == 0) {
+                return null;
+            }
             byte[] result = new byte[(int) length];
             int readInt = entity.getContent().read(result);
             if (readInt < 0) {
@@ -424,33 +296,7 @@ public class HttpUtil {
         } catch (Exception e) {
             LOG.error("doGet error ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpGet != null) {
-                try {
-                    httpGet.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closeGet(entity, response, httpGet, httpClient);
         }
         return null;
     }
@@ -483,16 +329,7 @@ public class HttpUtil {
                 return null;
             }
 
-            List<NameValuePair> pairs = null;
-            if (params != null && !params.isEmpty()) {
-                pairs = new ArrayList<NameValuePair>(params.size());
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    String value = entry.getValue();
-                    if (value != null) {
-                        pairs.add(new BasicNameValuePair(entry.getKey(), value));
-                    }
-                }
-            }
+            List<NameValuePair> pairs = getPairs(params);
             httpPost = new HttpPost(url);
             httpPost.setHeaders(headers);
             if (pairs != null && pairs.size() > 0) {
@@ -500,7 +337,7 @@ public class HttpUtil {
             }
             response = httpClient.execute(httpPost);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+            if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
@@ -512,33 +349,7 @@ public class HttpUtil {
         } catch (Exception e) {
             LOG.error("doPost error ", e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpPost != null) {
-                try {
-                    httpPost.abort();
-                } catch (Throwable ex) {
-                }
-            }
-
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
-            }
+            closePost(entity, response, httpPost, httpClient);
         }
         return null;
     }
@@ -567,7 +378,7 @@ public class HttpUtil {
             httpPost.setEntity(new ByteArrayEntity(content.getBytes(CHARSET), ContentType.APPLICATION_JSON));
             response = httpClient.execute(httpPost);
             int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode != 200) {
+                if (statusCode != HTTP_OK) {
                 throw new RuntimeException("HttpClient,error status code :" + statusCode);
             }
             entity = response.getEntity();
@@ -581,34 +392,90 @@ public class HttpUtil {
             LOG.error("doPost IOException ", e);
             throw new Exception(e);
         } finally {
-            if (entity != null) {
-                try {
-                    EntityUtils.consume(entity);
-                } catch (Throwable ex) {
+            closePost(entity, response, httpPost, httpClient);
+        }
+    }
+
+    private static List<NameValuePair> getPairs(Map<String, String> params) {
+        List<NameValuePair> pairs = null;
+        if (params != null && !params.isEmpty()) {
+            pairs = new ArrayList<>(params.size());
+            for (Map.Entry<String, String> entry : params.entrySet()) {
+                String value = entry.getValue();
+                if (value != null) {
+                    pairs.add(new BasicNameValuePair(entry.getKey(), value));
                 }
             }
+        }
+        return pairs;
+    }
 
-            if (response != null) {
-                try {
-                    response.close();
-                } catch (Throwable ex) {
-                }
+    private static String getUrl(String url, Map<String, String> params, String charset) throws IOException {
+        List<NameValuePair> pairs = getPairs(params);
+        if (pairs != null) {
+            url += "?" + EntityUtils.toString(new UrlEncodedFormEntity(pairs, charset));
+        }
+
+        return url;
+    }
+
+    private static void closePost(HttpEntity entity, CloseableHttpResponse response, HttpPost httpPost, CloseableHttpClient httpClient) {
+        if (entity != null) {
+            try {
+                EntityUtils.consume(entity);
+            } catch (Throwable ex) {
             }
+        }
 
-            if (httpPost != null) {
-                try {
-                    httpPost.abort();
-                } catch (Throwable ex) {
-                }
+        if (response != null) {
+            try {
+                response.close();
+            } catch (Throwable ex) {
             }
+        }
 
-            if (httpClient != null) {
-                try {
-                    httpClient.close();
-                } catch (Throwable ex) {
-                }
+        if (httpPost != null) {
+            try {
+                httpPost.abort();
+            } catch (Throwable ex) {
+            }
+        }
+
+        if (httpClient != null) {
+            try {
+                httpClient.close();
+            } catch (Throwable ex) {
             }
         }
     }
 
+    private static void closeGet(HttpEntity entity, CloseableHttpResponse response, HttpGet httpGet, CloseableHttpClient httpClient) {
+        if (entity != null) {
+            try {
+                EntityUtils.consume(entity);
+            } catch (Throwable ex) {
+            }
+        }
+
+        if (response != null) {
+            try {
+                response.close();
+            } catch (Throwable ex) {
+            }
+        }
+
+        if (httpGet != null) {
+            try {
+                httpGet.abort();
+            } catch (Throwable ex) {
+            }
+        }
+
+        if (httpClient != null) {
+            try {
+                httpClient.close();
+            } catch (Throwable ex) {
+            }
+        }
+    }
 }

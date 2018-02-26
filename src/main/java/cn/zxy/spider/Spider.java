@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.github.rholder.retry.*;
+import com.sun.org.apache.bcel.internal.generic.BIPUSH;
 import lombok.Data;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.HttpClient;
@@ -30,61 +31,36 @@ import java.util.stream.Collectors;
  * @author Silence
  * @Date 2017/12/11
  */
-public class Spider {
-    public static final String URL = "https://www.binance.com/exchange/public/product";
-    public static final String BTCUSDT = "BTCUSDT";
-    public static final BigDecimal USD_RATE = new BigDecimal(6.6071);
+public abstract class Spider {
+    private static final  String USD_RATE_URL = "https://api.fixer.io/latest?base=USD";
 
     //获取数据失败重试3次
-    private static final Retryer<String> RETRYER_TIME_OUT = RetryerBuilder.<String>newBuilder()
+    protected static final Retryer<String> RETRYER_TIME_OUT = RetryerBuilder.<String>newBuilder()
             .withWaitStrategy(WaitStrategies.noWait())
             .retryIfException()
             .withStopStrategy(StopStrategies.stopAfterAttempt(3))
             .retryIfResult(x -> (x == null || x.trim().length() == 0))
             .build();
 
-    public static Map<String, Double> getCoinDatas() {
+    protected BigDecimal getUsdRate() {
         String content = null;
         try {
-            content = RETRYER_TIME_OUT.call(() -> HttpUtil.doGet(URL, null));
+            content = RETRYER_TIME_OUT.call(() -> HttpUtil.doGet(USD_RATE_URL, null));
         } catch (ExecutionException e) {
             e.printStackTrace();
         } catch (RetryException e) {
             e.printStackTrace();
         }
+
         if (content == null) {
             System.out.println("本次获取数据失败");
             return null;
         }
+
         JSONObject jsonObject = JSON.parseObject(content);
-        JSONArray jsonArray = jsonObject.getJSONArray("data");
-        List<CoinTemp> coinTempList = jsonArray.toJavaList(CoinTemp.class);
-
-        Map<String, CoinTemp> filterCoinTemps = coinTempList.stream()
-                .filter(x -> (x.getSymbol().equals(BTCUSDT) || ConfigLoader.getConfig().getCoinTypes().contains(x.getSymbol().endsWith("BTC") ? x.getSymbol().split("BTC")[0] : x.getSymbol())))
-                .collect(Collectors.toMap(x -> x.getSymbol(), x -> x));
-
-        BigDecimal btcUsdt = filterCoinTemps.get(BTCUSDT).getClose();
-        Map<String, Double> resultMap = new HashMap<>();
-        filterCoinTemps.values().stream().forEach(x -> {
-            if (x.getSymbol().equals(BTCUSDT)) {
-                resultMap.put(x.getBaseAsset(), x.getClose().multiply(USD_RATE).doubleValue());
-            } else {
-                resultMap.put(x.getBaseAsset(), x.getClose().multiply(btcUsdt).multiply(USD_RATE).doubleValue());
-            }
-        });
-        return resultMap;
+        return jsonObject.getJSONObject("rates").getBigDecimal("CNY");
     }
 
-    public static void main(String[] args) throws URISyntaxException {
-        Map<String, Double> map = getCoinDatas();
-        System.out.println(map);
-    }
 
-    @Data
-    static class CoinTemp {
-        private String symbol;
-        private String baseAsset;
-        private BigDecimal close;
-    }
+    public abstract Map<String, Double> getCoinDatas();
 }

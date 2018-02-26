@@ -1,11 +1,11 @@
 package cn.zxy.config;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.io.FileReader;
 
 /**
  * @author Silence 000996
@@ -13,14 +13,24 @@ import java.util.Properties;
  */
 public class ConfigLoader implements Runnable {
     private String configPath;
-    private static MonitorConfig config;
     private static Long lastModifyTime;
+    private static SystemConfig systemConfig;
 
     public ConfigLoader(String configPath) {
         this.configPath = configPath;
     }
 
     public static void main(String[] args) throws Exception {
+        // 读取配置文件
+        BufferedReader reader = new BufferedReader(new FileReader("E:\\IdeaProject\\CoinMonitor\\config.json"));
+        StringBuilder configContent = new StringBuilder();
+        while (reader.ready()) {
+            configContent.append(reader.readLine());
+        }
+
+        JSONObject jsonObject = JSON.parseObject(configContent.toString());
+        System.out.println(JSON.parseObject(configContent.toString(), SystemConfig.class));
+
     }
 
     @Override
@@ -33,30 +43,24 @@ public class ConfigLoader implements Runnable {
     }
 
     public void load() throws Exception {
-        Properties pro = new Properties();
         File file = new File(configPath);
         if (lastModifyTime == null || lastModifyTime != file.lastModified()) {
-            pro.load(new FileInputStream(file));
-            MonitorConfig monitorConfig = new MonitorConfig();
-            Class monitorConfigClass = monitorConfig.getClass();
-            for (String name : pro.stringPropertyNames()) {
-                Field field = monitorConfigClass.getDeclaredField(name);
-                field.setAccessible(true);
-                if (field.getType().equals(List.class)) {
-                    field.set(monitorConfig, Arrays.asList(pro.getProperty(name).trim().split(",")));
-                } else if (field.getType().equals(Integer.class)) {
-                    field.set(monitorConfig, Integer.valueOf(pro.getProperty(name).trim()));
-                } else {
-                    field.set(monitorConfig, pro.getProperty(name).trim());
-                }
+            // 读取配置文件
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            StringBuilder configContent = new StringBuilder();
+            while (reader.ready()) {
+                configContent.append(reader.readLine());
             }
-            config = monitorConfig;
+
+            JSONObject jsonObject = JSON.parseObject(configContent.toString());
+            systemConfig = JSON.parseObject(configContent.toString(), SystemConfig.class);
+
             lastModifyTime = file.lastModified();
-            System.out.println("reload config:" + config);
+            System.out.println("reload system config:" + systemConfig);
         }
     }
 
-    public static MonitorConfig getConfig() {
-        return config;
+    public static SystemConfig getSystemConfig() {
+        return systemConfig;
     }
 }
